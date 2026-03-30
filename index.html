@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Attendance Dashboard</title>
+<title>Vibrant Attendance Dashboard</title>
 <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 <style>
 body {
@@ -164,6 +164,7 @@ submitBtn.addEventListener('click',()=>{
 
 // Export JSON for App Inventor
 exportJsonBtn.addEventListener('click',()=>{
+    if(attendanceData.length===0){alert("No attendance data to export!"); return;}
     const dataStr=JSON.stringify(attendanceData,null,2);
     const blob=new Blob([dataStr],{type:"application/json"});
     const url=URL.createObjectURL(blob);
