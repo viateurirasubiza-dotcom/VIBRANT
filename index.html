@@ -1,0 +1,178 @@
+﻿<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Attendance Dashboard</title>
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<style>
+body {
+    font-family:'Roboto', sans-serif;
+    margin:0; padding:10px;
+    background: linear-gradient(135deg,#ff9a9e 0%,#fad0c4 50%,#a18cd1 100%);
+    color:#333;
+}
+.container{ max-width:480px; margin:auto; }
+h1{text-align:center; margin-bottom:15px; color:#222; text-shadow:1px 1px 3px rgba(0,0,0,0.2);}
+.card{
+    background:linear-gradient(135deg,#fef9c3,#d9f99d);
+    border-radius:16px; padding:16px; margin-bottom:15px;
+    box-shadow:0 6px 15px rgba(0,0,0,0.2); transition:0.3s;
+}
+.card:hover{ transform:translateY(-5px); box-shadow:0 12px 25px rgba(0,0,0,0.25);}
+input,select,button{
+    width:100%; padding:12px 14px; margin-top:10px; border-radius:12px; font-size:16px; border:none; outline:none;
+}
+input,select{ border:1px solid #ccc; background:#f3f4f6; }
+input:focus,select:focus{ border:2px solid #ff6a00; box-shadow:0 0 8px rgba(255,106,0,0.4); }
+button{ font-weight:bold; cursor:pointer; color:#fff; transition:0.3s;}
+#submitBtn{ background:linear-gradient(45deg,#36d1dc,#5b86e5);}
+#exportJsonBtn{ background:linear-gradient(45deg,#43e97b,#38f9d7);}
+table{width:100%; border-collapse:collapse; margin-top:15px; border-radius:12px; overflow:hidden; display:none; background:linear-gradient(135deg,#ffecd2,#fcb69f);}
+th,td{padding:10px;text-align:center;border:1px solid #ddd;}
+th{background:#fcd5ce;} 
+.present{color:#4caf50;font-weight:bold;}
+.late{color:#e53935;font-weight:bold;}
+#chartsCard canvas{width:100%!important;height:auto!important;}
+</style>
+</head>
+<body>
+
+<div class="container">
+<h1>🌈 Vibrant Attendance</h1>
+
+<div class="card" id="loginCard">
+    <label>Role:</label>
+    <select id="roleSelect">
+        <option value="teacher">Teacher</option>
+        <option value="admin">Admin</option>
+    </select>
+    <input type="text" id="teacherName" placeholder="Enter your name">
+    <input type="password" id="adminPassword" placeholder="Admin Password" style="display:none;">
+    <button id="submitBtn">Submit Attendance</button>
+    <button id="exportJsonBtn" style="display:none;">Export JSON</button>
+</div>
+
+<div class="card">
+    <table id="attendanceTable">
+        <thead>
+            <tr><th>Name</th><th>Status</th><th>Date</th><th>Check-in</th><th>Message</th></tr>
+        </thead>
+        <tbody></tbody>
+    </table>
+</div>
+
+<div class="card" id="chartsCard" style="display:none;">
+    <canvas id="statusChart" height="120"></canvas>
+</div>
+</div>
+
+<script>
+// Elements
+const tableBody=document.querySelector('#attendanceTable tbody');
+const submitBtn=document.getElementById('submitBtn');
+const exportJsonBtn=document.getElementById('exportJsonBtn');
+const roleSelect=document.getElementById('roleSelect');
+const teacherNameInput=document.getElementById('teacherName');
+const adminPasswordInput=document.getElementById('adminPassword');
+const attendanceTable=document.getElementById('attendanceTable');
+const chartsCard=document.getElementById('chartsCard');
+
+let attendanceData=[];
+
+// Admin registration
+if(!localStorage.getItem('adminPassword')){
+    const newPass=prompt("No admin found. Set new admin password:");
+    if(newPass)localStorage.setItem('adminPassword',newPass);
+    else alert("Admin registration required!");
+}
+
+// Helpers
+function getCurrentDate(){return new Date().toLocaleDateString();}
+function getCurrentTime(){return new Date().toLocaleTimeString();}
+function addAttendanceEntry(name){
+    const now=new Date();
+    const status=(now.getHours()>8||(now.getHours()===8 && now.getMinutes()>0))?'Late':'Present';
+    const message=status==='Late'?'You are late!':'-';
+    return {name,status,date:getCurrentDate(),checkIn:getCurrentTime(),message};
+}
+
+// Render Table & Chart
+function renderAdminTable(){
+    tableBody.innerHTML='';
+    attendanceData.forEach(entry=>{
+        const row=document.createElement('tr');
+        row.innerHTML=`<td>${entry.name}</td>
+        <td class="${entry.status==='Late'?'late':'present'}">${entry.status}</td>
+        <td>${entry.date}</td>
+        <td>${entry.checkIn}</td>
+        <td>${entry.message}</td>`;
+        tableBody.appendChild(row);
+    });
+    attendanceTable.style.display='table';
+    updateCharts();
+}
+
+function updateCharts(){
+    chartsCard.style.display='block';
+    const presentCount=attendanceData.filter(e=>e.status==='Present').length;
+    const lateCount=attendanceData.filter(e=>e.status==='Late').length;
+
+    if(window.statusChartInstance) window.statusChartInstance.destroy();
+    const ctx=document.getElementById('statusChart').getContext('2d');
+    window.statusChartInstance=new Chart(ctx,{
+        type:'doughnut',
+        data:{labels:['Present','Late'],datasets:[{data:[presentCount,lateCount],backgroundColor:['#4caf50','#e53935'],hoverOffset:10}]},
+        options:{responsive:true, plugins:{legend:{position:'bottom'}}}
+    });
+}
+
+// Role switch
+roleSelect.addEventListener('change',()=>{
+    if(roleSelect.value==='admin'){
+        adminPasswordInput.style.display='inline-block';
+        exportJsonBtn.style.display='none';
+        attendanceTable.style.display='none';
+        chartsCard.style.display='none';
+    } else {
+        adminPasswordInput.style.display='none';
+        exportJsonBtn.style.display='none';
+        attendanceTable.style.display='none';
+        chartsCard.style.display='none';
+    }
+});
+
+// Submit
+submitBtn.addEventListener('click',()=>{
+    const role=roleSelect.value;
+    const name=teacherNameInput.value.trim();
+    if(!name){alert("Enter your name"); return;}
+    if(role==='teacher'){
+        attendanceData.push(addAttendanceEntry(name));
+        alert("Your attendance recorded!");
+    } else {
+        const savedPassword=localStorage.getItem('adminPassword');
+        if(adminPasswordInput.value===savedPassword){
+            renderAdminTable();
+            exportJsonBtn.style.display='inline-block';
+            alert("Admin login successful!");
+        } else alert("Incorrect Admin Password!");
+    }
+    teacherNameInput.value='';
+    adminPasswordInput.value='';
+});
+
+// Export JSON for App Inventor
+exportJsonBtn.addEventListener('click',()=>{
+    const dataStr=JSON.stringify(attendanceData,null,2);
+    const blob=new Blob([dataStr],{type:"application/json"});
+    const url=URL.createObjectURL(blob);
+    const a=document.createElement('a');
+    a.href=url; a.download="data.json"; a.click();
+    URL.revokeObjectURL(url);
+    alert("Attendance exported as JSON! Upload to GitHub raw for App Inventor.");
+});
+</script>
+
+</body>
+</html>
